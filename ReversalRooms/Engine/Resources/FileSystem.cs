@@ -58,16 +58,38 @@ namespace ReversalRooms.Engine.Resources
             }
         }
 
+        #region Paths
         /// <summary>
-        /// Represents the root modules directory of the game
+        /// Represents the root directory of the game
         /// </summary>
         public static readonly DirectoryInfo RootDirectory;
 
         /// <summary>
-        /// Represents the path to the root modules directory of the game
+        /// Represents the path to the root directory of the game
         /// </summary>
         public static readonly string RootPath;
-        
+
+        /// <summary>
+        /// Represents the saves directory of the game
+        /// </summary>
+        public static readonly DirectoryInfo SavesDirectory;
+
+        /// <summary>
+        /// Represents the path to the saves directory of the game
+        /// </summary>
+        public static readonly string SavesPath;
+
+        /// <summary>
+        /// Represents the modules directory of the game
+        /// </summary>
+        public static readonly DirectoryInfo ModulesDirectory;
+
+        /// <summary>
+        /// Represents the path to the modules directory of the game
+        /// </summary>
+        public static readonly string ModulesPath;
+        #endregion
+
         private static Dictionary<string, ZipArchive> ZipCache = new();
 
         static FileSystem()
@@ -77,8 +99,40 @@ namespace ReversalRooms.Engine.Resources
             var assemblyDir = assemblyFile.Directory;
 
             // Initiate paths
+            RootDirectory = assemblyDir;
+            RootPath = assemblyDir.FullName;
             RootDirectory = new DirectoryInfo(Path.Combine(assemblyDir.FullName, "Modules"));
             RootPath = Path.Combine(RootDirectory.FullName);
+        }
+
+        /// <summary>
+        /// Normalizes the path and sets the current directory to it
+        /// </summary>
+        /// <param name="curdir">The path to set the current dirctory to</param>
+        public static void SetCurrentDirectory(string curdir)
+        {
+            // Use DirectoryInfo to perform some light validation on the root path and normalize platform separation characters
+            curdir = new DirectoryInfo(curdir).FullName;
+
+            // Set current directory to the specified root path for Path.GetFullPath to use that as a root path
+            Directory.SetCurrentDirectory(curdir);
+        }
+
+        /// <summary>
+        /// Clears any ZIP archives cached in memory
+        /// </summary>
+        public static void ClearZipCache() => ZipCache.Clear();
+
+        #region Normalizers
+        /// <summary>
+        /// Normalizes and validates a path relative to the root path
+        /// </summary>
+        /// <param name="path">The path to normalize and validate</param>
+        /// <param name="indexPath">A Unix-style path string of the specfied path starting relative to the root path</param>
+        /// <returns>A normalized full path</returns>
+        public static string NormalizeRootPath(string path, out string indexPath)
+        {
+            return NormalizeRelativePath(RootPath, path, out indexPath);
         }
 
         /// <summary>
@@ -87,26 +141,32 @@ namespace ReversalRooms.Engine.Resources
         /// <param name="path">The path to normalize and validate</param>
         /// <param name="indexPath">A Unix-style path string of the specfied path starting relative to the modules root path</param>
         /// <returns>A normalized full path</returns>
-        public static string NormalizeRootPath(string path, out string indexPath)
+        public static string NormalizeModulesPath(string path, out string indexPath)
         {
-            return NormalizeRelativePath(RootPath, path, out indexPath);
+            return NormalizeRelativePath(ModulesPath, path, out indexPath);
         }
 
         /// <summary>
-        /// Normalizes and validates a path relative to a specified root path
+        /// Normalizes and validates a path relative to the Saves root path
         /// </summary>
         /// <param name="path">The path to normalize and validate</param>
-        /// <param name="root">The root path to use</param>
+        /// <param name="indexPath">A Unix-style path string of the specfied path starting relative to the Saves root path</param>
+        /// <returns>A normalized full path</returns>
+        public static string NormalizeSavesPath(string path, out string indexPath)
+        {
+            return NormalizeRelativePath(SavesPath, path, out indexPath);
+        }
+
+        /// <summary>
+        /// Normalizes and validates a path relative to the current directory
+        /// </summary>
+        /// <param name="path">The path to normalize and validate</param>
         /// <param name="indexPath">A Unix-style path string of the specfied path starting relative to the specified root path</param>
         /// <returns>A normalized full path</returns>
         /// <exception cref="ArgumentOutOfRangeException">Thrown if the specified path is not derived from the specified root path</exception>
-        public static string NormalizeRelativePath(string root, string path, out string indexPath)
+        public static string NormalizeRelativePath(string path, out string indexPath)
         {
-            // Use DirectoryInfo to perform some light validation on the root path and normalize platform separation characters
-            root = new DirectoryInfo(root).FullName;
-
-            // Set current directory to the specified root path for Path.GetFullPath to use that as a root path
-            Directory.SetCurrentDirectory(root);
+            string root = Directory.GetCurrentDirectory();
 
             // Remove any leading directory separation characters which would cause Path.GetFullPath to resolve from the system root
             while (path[0] == '/' || path[0] == '\\') path = path.Substring(1);
@@ -126,12 +186,22 @@ namespace ReversalRooms.Engine.Resources
         }
 
         /// <summary>
-        /// Clears any ZIP archives cached in memory
+        /// Normalizes and validates a path relative to a specified root path
         /// </summary>
-        public static void ClearZipCache() => ZipCache.Clear();
+        /// <param name="path">The path to normalize and validate</param>
+        /// <param name="root">The root path to use</param>
+        /// <param name="indexPath">A Unix-style path string of the specfied path starting relative to the specified root path</param>
+        /// <returns>A normalized full path</returns>
+        public static string NormalizeRelativePath(string root, string path, out string indexPath)
+        {
+            SetCurrentDirectory(root);
+            return NormalizeRelativePath(path, out indexPath);
+        }
+        #endregion
 
+        #region ZIPs
         /// <summary>
-        /// Retrieves from cache or reads a ZIP archive located at a specified path
+        /// Retrieves from cache or reads a ZIP archive located at a specified path resolved relative to the current directory
         /// </summary>
         /// <param name="path">Path to the ZIP archive</param>
         /// <param name="useCache">Whether to check if the ZIP is loaded in cache or not</param>
@@ -140,7 +210,7 @@ namespace ReversalRooms.Engine.Resources
         public static ZipArchive GetZipArchive(string path, bool useCache = true)
         {
             // Normalize
-            path = NormalizeRootPath(path, out var indexPath);
+            path = NormalizeRelativePath(path, out var indexPath);
 
             // Check cache if allowed
             if (useCache)
@@ -164,7 +234,20 @@ namespace ReversalRooms.Engine.Resources
         }
 
         /// <summary>
-        /// Attempts to retrieve from cache or reads a ZIP archive located at a specified path
+        /// Retrieves from cache or reads a ZIP archive located at a specified path resolved relative to a specified root path
+        /// </summary>
+        /// <param name="root">The root path to resolve the path from</param>
+        /// <param name="path">Path to the ZIP archive</param>
+        /// <param name="useCache">Whether to check if the ZIP is loaded in cache or not</param>
+        /// <returns>The resultant ZIP archive</returns>
+        public static ZipArchive GetZipArchive(string root, string path, bool useCache = true)
+        {
+            SetCurrentDirectory(root);
+            return GetZipArchive(path, useCache);
+        }
+
+        /// <summary>
+        /// Attempts to retrieve from cache or reads a ZIP archive located at a specified path resolved relative to the current directory
         /// </summary>
         /// <param name="path">Path to the ZIP archive</param>
         /// <param name="archive">The resultant ZIP archive if successful</param>
@@ -185,7 +268,31 @@ namespace ReversalRooms.Engine.Resources
         }
 
         /// <summary>
-        /// Opens a read-only stream of a file at a specified path
+        /// Attempts to retrieve from cache or reads a ZIP archive located at a specified path resolved relative to a specified root path
+        /// </summary>
+        /// <param name="root">The root path to resolve the path from</param>
+        /// <param name="path">Path to the ZIP archive</param>
+        /// <param name="archive">The resultant ZIP archive if successful</param>
+        /// <param name="useCache">Whether to check if the ZIP is loaded in cache or not</param>
+        /// <returns>Whether a ZIp archive was successfully retrieved or read or not</returns>
+        public static bool TryGetZipArchive(string root, string path, out ZipArchive archive, bool useCache = true)
+        {
+            try
+            {
+                archive = GetZipArchive(root, path, useCache);
+                return true;
+            }
+            catch
+            {
+                archive = null;
+                return false;
+            }
+        }
+        #endregion
+
+        #region Files
+        /// <summary>
+        /// Opens a read-only stream of a file at a specified path resolved relative to the current directory
         /// </summary>
         /// <param name="path">Path to the file to read</param>
         /// <returns>A read-only stream of the specified file</returns>
@@ -193,7 +300,7 @@ namespace ReversalRooms.Engine.Resources
         public static File ReadFile(string path)
         {
             // Normalize path
-            path = NormalizeRootPath(path, out _);
+            path = NormalizeRelativePath(path, out _);
 
             // Check file system for the file
             var fileInfoNaive = new FileInfo(path);
@@ -224,6 +331,21 @@ namespace ReversalRooms.Engine.Resources
             throw new FileNotFoundException("Specified file path does not exist within the specified zip archive", zipPath + Path.PathSeparator + subPath);
         }
 
+
+        /// <summary>
+        /// Opens a read-only stream of a file at a specified path resolved relative to a specified root path
+        /// </summary>
+        /// <param name="root">The root path to resolve the path from</param>
+        /// <param name="path">Path to the file to read</param>
+        /// <returns>A read-only stream of the specified file</returns>
+        public static File ReadFile(string root, string path)
+        {
+            SetCurrentDirectory(root);
+            return ReadFile(path);
+        }
+        #endregion
+
+        #region Directories
         /// <summary>
         /// Enumerates all files in a specified directory
         /// </summary>
@@ -235,7 +357,7 @@ namespace ReversalRooms.Engine.Resources
         public static IEnumerable<File> EnumerateFilesInDirectory(string dir, bool recursive = false)
         {
             // Normalize
-            dir = NormalizeRootPath(dir, out _);
+            dir = NormalizeRelativePath(dir, out _);
 
             // Check file system for directory
             var dirInfo = new DirectoryInfo(dir);
@@ -279,5 +401,19 @@ namespace ReversalRooms.Engine.Resources
                 }
             }
         }
+
+        /// <summary>
+        /// Enumerates all files in a specified directory
+        /// </summary>
+        /// <param name="root">The root path to resolve the path from</param>
+        /// <param name="dir">Path to the directory whose files are to be enumerated</param>
+        /// <param name="recursive">True to enumerate all files in the directory and all its subdirectories, false to enumerate files only in the directory itself</param>
+        /// <returns></returns>
+        public static IEnumerable<File> EnumerateFilesInDirectory(string root, string dir, bool recursive = false)
+        {
+            SetCurrentDirectory(root);
+            return EnumerateFilesInDirectory(dir, recursive);
+        }
+        #endregion Directories
     }
 }
