@@ -190,14 +190,14 @@ namespace ReversalRooms.Engine.Resources
         /// <param name="path">Path to the file to read</param>
         /// <returns>A read-only stream of the specified file</returns>
         /// <exception cref="FileNotFoundException">Thrown if no file exists at the specified path</exception>
-        public static Stream ReadFile(string path)
+        public static File ReadFile(string path)
         {
             // Normalize path
             path = NormalizeRootPath(path, out _);
 
             // Check file system for the file
             var fileInfoNaive = new FileInfo(path);
-            if (fileInfoNaive.Exists) return fileInfoNaive.OpenRead();
+            if (fileInfoNaive.Exists) return new File(fileInfoNaive.OpenRead(), fileInfoNaive.Name, fileInfoNaive.FullName);
             // Nothing to read if the file doesn't exist and no ZIP file is specified as the path or part of the path
             if (!path.Contains(".zip")) throw new FileNotFoundException("Specified file path does not exist", path);
 
@@ -216,7 +216,7 @@ namespace ReversalRooms.Engine.Resources
             {
                 if (entry.FullName == subPath)
                 {
-                    return entry.Open();
+                    return new File(entry.Open(), entry.Name, Path.GetFullPath(Path.Combine(zipPath, entry.FullName)));
                 }
             }
 
