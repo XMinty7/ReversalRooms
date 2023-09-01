@@ -1,4 +1,5 @@
-﻿using System;
+﻿using ReversalRooms.Engine.Utils;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -6,6 +7,9 @@ using System.Text;
 
 namespace ReversalRooms.Engine.Resources
 {
+    /// <summary>
+    /// Contains methods to manage file system operations
+    /// </summary>
     public static class FileSystem
     {
         /// <summary>
@@ -41,9 +45,7 @@ namespace ReversalRooms.Engine.Resources
             /// <returns>The resultant bytes</returns>
             public byte[] GetBytes()
             {
-                var bytes = new byte[Contents.Length];
-                Contents.Read(bytes, 0, bytes.Length);
-                return bytes;
+                return Contents.ReadAll();
             }
 
             /// <summary>
@@ -53,8 +55,7 @@ namespace ReversalRooms.Engine.Resources
             /// <returns>The resultant string</returns>
             public string GetString(Encoding encoding = null)
             {
-                if (encoding == null) encoding = Encoding.UTF8;
-                return encoding.GetString(GetBytes());
+                return Contents.ReadAllString(encoding: encoding);
             }
         }
 
@@ -101,8 +102,12 @@ namespace ReversalRooms.Engine.Resources
             // Initiate paths
             RootDirectory = assemblyDir;
             RootPath = assemblyDir.FullName;
-            RootDirectory = new DirectoryInfo(Path.Combine(assemblyDir.FullName, "Modules"));
-            RootPath = Path.Combine(RootDirectory.FullName);
+
+            ModulesDirectory = new DirectoryInfo(Path.Combine(assemblyDir.FullName, "Modules"));
+            ModulesPath = Path.Combine(ModulesDirectory.FullName);
+
+            SavesDirectory = new DirectoryInfo(Path.Combine(assemblyDir.FullName, "Saves"));
+            SavesPath = Path.Combine(SavesDirectory.FullName);
         }
 
         /// <summary>
@@ -169,19 +174,20 @@ namespace ReversalRooms.Engine.Resources
             string root = Directory.GetCurrentDirectory();
 
             // Remove any leading directory separation characters which would cause Path.GetFullPath to resolve from the system root
-            while (path[0] == '/' || path[0] == '\\') path = path.Substring(1);
+            while (path.Length > 1 && (path[0] == '/' || path[0] == '\\')) path = path.Substring(1);
 
             // Resolve the path from the root
             path = Path.GetFullPath(path);
 
             // After resolving the path, it should start with the specified root path
-            if (path.Length <= root.Length || !path.StartsWith(root))
+            if (path.Length < root.Length || !path.StartsWith(root))
             {
                 throw new ArgumentOutOfRangeException("path", "Specified file path is not derived from the specified root path");
             }
 
             // Set index path as a normalized unix-style path string of the specified path relative to the specified root path
-            indexPath = path.Substring(root.Length + 1).Replace(Path.DirectorySeparatorChar, '/');
+            if (path.Length == root.Length) indexPath = ".";
+            else indexPath = path.Substring(root.Length + 1).Replace(Path.DirectorySeparatorChar, '/');
             return path;
         }
 
@@ -351,10 +357,11 @@ namespace ReversalRooms.Engine.Resources
         /// </summary>
         /// <param name="dir">Path to the directory whose files are to be enumerated</param>
         /// <param name="recursive">True to enumerate all files in the directory and all its subdirectories, false to enumerate files only in the directory itself</param>
-        /// <returns></returns>
+        /// <param name="extension">An extension to filter the files by</param>
+        /// <returns>An enumerable that iterates through the matched files</returns>
         /// <exception cref="DirectoryNotFoundException">Thrown if no directory exists at the specified path</exception>
         /// <exception cref="FileNotFoundException">Thrown if a ZIP archive was specified as the path or part of the path but does not exist</exception>
-        public static IEnumerable<File> EnumerateFilesInDirectory(string dir, bool recursive = false)
+        public static IEnumerable<File> EnumerateFilesInDirectory(string dir, bool recursive = false, string extension = "*")
         {
             // Normalize
             dir = NormalizeRelativePath(dir, out _);
@@ -363,8 +370,9 @@ namespace ReversalRooms.Engine.Resources
             var dirInfo = new DirectoryInfo(dir);
             if (dirInfo.Exists)
             {
+                if (extension != "*") extension = (extension[0] == '.') ? "*" + extension : "*." + extension;
                 // If it exists, simply enumerate it
-                var entries = dirInfo.EnumerateFiles("*", recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly);
+                var entries = dirInfo.EnumerateFiles(extension, recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly);
                 foreach (var entry in entries)
                 {
                     yield return new File(entry.OpenRead(), entry.Name, entry.FullName);
@@ -391,10 +399,11 @@ namespace ReversalRooms.Engine.Resources
                 // Enumerate within the ZIP archive
                 foreach (var entry in archive.Entries)
                 {
+                    if (extension == "*") extension = "";
                     // Must not be a directory (doesn't end with a trailing slash)
                     // Must derive from the specified path inside the ZIP archive
                     // Must be a top level entry inside the specified directory if recursive mode is off
-                    if (!entry.FullName.EndsWith("/") && entry.FullName.StartsWith(subPath) && (!recursive || recursive && entry.FullName.LastIndexOf('/') > subPathLength))
+                    if (entry.FullName[entry.FullName.Length - 1] != '/' && entry.Name.EndsWith(extension) && entry.FullName.StartsWith(subPath) && (!recursive || recursive && entry.FullName.LastIndexOf('/') > subPathLength))
                     {
                         yield return new File(entry.Open(), entry.Name, Path.GetFullPath(Path.Combine(zipPath, entry.FullName)));
                     }
@@ -408,11 +417,12 @@ namespace ReversalRooms.Engine.Resources
         /// <param name="root">The root path to resolve the path from</param>
         /// <param name="dir">Path to the directory whose files are to be enumerated</param>
         /// <param name="recursive">True to enumerate all files in the directory and all its subdirectories, false to enumerate files only in the directory itself</param>
-        /// <returns></returns>
-        public static IEnumerable<File> EnumerateFilesInDirectory(string root, string dir, bool recursive = false)
+        /// <param name="extension">An extension to filter the files by</param>
+        /// <returns>An enumerable that iterates through the matched files</returns>
+        public static IEnumerable<File> EnumerateFilesInDirectory(string root, string dir, bool recursive = false, string extension = "*")
         {
             SetCurrentDirectory(root);
-            return EnumerateFilesInDirectory(dir, recursive);
+            return EnumerateFilesInDirectory(dir, recursive, extension);
         }
         #endregion Directories
     }
