@@ -1,11 +1,7 @@
 ﻿using ReversalRooms.Engine.Resources;
 using ReversalRooms.Engine.Utils;
 using System;
-using System.Linq;
 using System.Collections.Generic;
-using System.IO;
-using System.Security.Cryptography;
-using System.Diagnostics;
 
 namespace ReversalRooms.Engine.Modules
 {
@@ -20,6 +16,7 @@ namespace ReversalRooms.Engine.Modules
         public static List<ModuleMetadata> FailedModules;
         public static Dictionary<string, ModuleMetadata> Modules;
 
+        #region Module Loading
         public static void LoadModules()
         {
             // List of mods waiting for some mod to load
@@ -40,7 +37,7 @@ namespace ReversalRooms.Engine.Modules
 
                 // TODO: Validate metadata
                 var mod = yamlFile.Contents.DeserializeYaml<ModuleMetadata>(true);
-                if (mod.Depdenencies == null) mod.Depdenencies = new ModuleDepdenency[0];
+                mod.Depdenencies ??= new ModuleDepdenency[0];
 
                 // Enlist the metadata, prefer newer version
                 if (modsById.TryGetValue(mod.ID, out var otherMod))
@@ -193,6 +190,7 @@ namespace ReversalRooms.Engine.Modules
 
             // Done loading
             AllModules = allMods;
+            CodeModules = new();
         }
 
         public static void LoadModule(ModuleMetadata metadata)
@@ -201,5 +199,6 @@ namespace ReversalRooms.Engine.Modules
             Console.Write("Loading: ");
             Console.WriteLine(metadata.ID);
         }
+        #endregion
     }
 }

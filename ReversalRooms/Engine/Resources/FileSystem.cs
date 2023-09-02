@@ -15,7 +15,7 @@ namespace ReversalRooms.Engine.Resources
         /// <summary>
         /// Represents a file
         /// </summary>
-        public struct File
+        public readonly struct File
         {
             /// <summary>
             /// Readable stream containing contents of the file
@@ -91,7 +91,7 @@ namespace ReversalRooms.Engine.Resources
         public static readonly string ModulesPath;
         #endregion
 
-        private static Dictionary<string, ZipArchive> ZipCache = new();
+        private static readonly Dictionary<string, ZipArchive> ZipCache = new();
 
         static FileSystem()
         {

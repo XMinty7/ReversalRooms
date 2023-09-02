@@ -11,8 +11,8 @@ namespace ReversalRooms.Engine.Utils
     /// </summary>
     public static class Extensions
     {
-        private static Deserializer Deserializer = new Deserializer();
-        private static Serializer Serializer = new Serializer();
+        private static readonly Deserializer Deserializer = new();
+        private static readonly Serializer Serializer = new();
 
         /// <summary>
         /// Reads a stream from start to end
@@ -37,7 +37,7 @@ namespace ReversalRooms.Engine.Utils
         /// <returns>The string read from the stream</returns>
         public static string ReadAllString(this Stream stream, bool fromStart = false, Encoding encoding = null)
         {
-            if (encoding == null) encoding = Encoding.UTF8;
+            encoding ??= Encoding.UTF8;
             return encoding.GetString(stream.ReadAll(fromStart));
         }
 
@@ -62,7 +62,7 @@ namespace ReversalRooms.Engine.Utils
         /// <param name="encoding">The encoding to use, UTF-8 by default</param>
         public static void WriteAll(this Stream stream, string str, bool fromStart = false, Encoding encoding = null)
         {
-            if (encoding == null) encoding = Encoding.UTF8;
+            encoding ??= Encoding.UTF8;
             WriteAll(stream, encoding.GetBytes(str), fromStart);
         }
 
